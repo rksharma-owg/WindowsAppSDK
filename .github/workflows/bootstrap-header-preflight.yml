@@ -45,7 +45,7 @@ jobs:
             exit 1
           fi
           cat baseline.log
-          rg 'no member named.*abort.*namespace.*std' baseline.log
+          grep -E 'no member named.*abort.*namespace.*std' baseline.log
           clang++ -std=c++17 -fsyntax-only -include cstdlib -I "$include_dir" bootstrap.cpp
           clang -std=c11 -fsyntax-only -I "$include_dir" bootstrap.c
           echo 'Reported failure reproduced; explicit cstdlib and C controls passed.'
