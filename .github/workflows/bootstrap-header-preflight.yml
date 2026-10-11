@@ -1,0 +1,56 @@
+name: Bootstrap header preflight
+on:
+  push:
+    branches: [codex/bootstrap-preflight]
+permissions:
+  contents: read
+jobs:
+  clang-reproduction:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 4008afbe7fb56717e798350ea78b225e72b567a5
+          path: source
+      - name: Verify tested baseline
+        shell: pwsh
+        run: |
+          $actual = git -C source rev-parse HEAD
+          if ($actual -ne '4008afbe7fb56717e798350ea78b225e72b567a5') { throw 'Unexpected source revision' }
+          Write-Host "Tested SHA: $actual"
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: CLANG64
+          update: true
+          install: mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-libc++
+      - name: Compile the real header and verify the reported failure
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          clang++ --version
+          cat > bootstrap.cpp <<'CPP'
+          #include <windows.h>
+          #define WINDOWSAPPSDK_RELEASE_MAJORMINOR 0x00020000
+          #define WINDOWSAPPSDK_RELEASE_VERSION_TAG_W L""
+          #define WINDOWSAPPSDK_RUNTIME_VERSION_UINT64 0
+          #include "MddBootstrap.h"
+          CPP
+          cat > bootstrap.c <<'C'
+          #include <windows.h>
+          #include "MddBootstrap.h"
+          C
+          include_dir=source/dev/WindowsAppRuntime_BootstrapDLL
+          if clang++ -std=c++17 -fsyntax-only -I "$include_dir" bootstrap.cpp > baseline.log 2>&1; then
+            echo 'Baseline unexpectedly compiled; reproduction is not established.'
+            exit 1
+          fi
+          cat baseline.log
+          rg 'no member named.*abort.*namespace.*std' baseline.log
+          clang++ -std=c++17 -fsyntax-only -include cstdlib -I "$include_dir" bootstrap.cpp
+          clang -std=c11 -fsyntax-only -I "$include_dir" bootstrap.c
+          echo 'Reported failure reproduced; explicit cstdlib and C controls passed.'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: baseline-compile-evidence
+          path: baseline.log
