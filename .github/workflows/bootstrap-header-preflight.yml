@@ -32,7 +32,7 @@ jobs:
           #include <windows.h>
           #define WINDOWSAPPSDK_RELEASE_MAJORMINOR 0x00020000
           #define WINDOWSAPPSDK_RELEASE_VERSION_TAG_W L""
-          #define WINDOWSAPPSDK_RUNTIME_VERSION_UINT64 0
+          #define WINDOWSAPPSDK_RUNTIME_VERSION_UINT64 0ULL
           #include "MddBootstrap.h"
           CPP
           cat > bootstrap.c <<'C'
