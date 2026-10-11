@@ -149,6 +149,6 @@ jobs:
         run: |
           if ((git rev-parse HEAD) -ne '${{ matrix.sha }}') { throw 'Unexpected source revision' }
           Write-Host 'Tested SHA: ${{ matrix.sha }}'
-          $env:Build_BuildNumber = '20261010.1'
+          $env:Build_BuildNumber = '2610.10001'
           ./BuildAll.ps1 -Platform x64 -Configuration Release -AzureBuildStep BuildFoundation
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
