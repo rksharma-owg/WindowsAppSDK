@@ -105,7 +105,7 @@ jobs:
           ref: 108c38d1dbe572e042b8df7d54c97051a492ac74
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
         with:
-          arch: ${{ matrix.arch }}
+          arch: ${{ matrix.arch == 'arm64' && 'x64_arm64' || matrix.arch }}
       - name: Compile C and C++ headers with MSVC
         shell: pwsh
         run: |
@@ -149,5 +149,6 @@ jobs:
         run: |
           if ((git rev-parse HEAD) -ne '${{ matrix.sha }}') { throw 'Unexpected source revision' }
           Write-Host 'Tested SHA: ${{ matrix.sha }}'
+          $env:Build_BuildNumber = '20261010.1'
           ./BuildAll.ps1 -Platform x64 -Configuration Release -AzureBuildStep BuildFoundation
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
