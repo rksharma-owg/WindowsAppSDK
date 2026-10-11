@@ -54,3 +54,100 @@ jobs:
         with:
           name: baseline-compile-evidence
           path: baseline.log
+  patched-clang:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 108c38d1dbe572e042b8df7d54c97051a492ac74
+          path: source
+      - name: Verify tested contribution
+        shell: pwsh
+        run: |
+          if ((git -C source rev-parse HEAD) -ne '108c38d1dbe572e042b8df7d54c97051a492ac74') { throw 'Unexpected patch revision' }
+          Write-Host 'Tested SHA: 108c38d1dbe572e042b8df7d54c97051a492ac74; baseline: 4008afbe7fb56717e798350ea78b225e72b567a5'
+      - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e
+        with:
+          msystem: CLANG64
+          update: true
+          install: mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-libc++
+      - name: Compile C and C++ public header paths
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          clang++ --version
+          cat > bootstrap.cpp <<'CPP'
+          #include <windows.h>
+          #define WINDOWSAPPSDK_RELEASE_MAJORMINOR 0x00020000
+          #define WINDOWSAPPSDK_RELEASE_VERSION_TAG_W L""
+          #define WINDOWSAPPSDK_RUNTIME_VERSION_UINT64 0ULL
+          #include "MddBootstrap.h"
+          CPP
+          cat > bootstrap.c <<'C'
+          #include <windows.h>
+          #include "MddBootstrap.h"
+          C
+          for standard in c++17 c++20 c++23; do
+            clang++ -std="$standard" -fsyntax-only -I source/dev/WindowsAppRuntime_BootstrapDLL bootstrap.cpp
+          done
+          clang -std=c11 -fsyntax-only -I source/dev/WindowsAppRuntime_BootstrapDLL bootstrap.c
+          echo 'All patched Clang C/C++ header compilations passed.'
+  msvc-header:
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86, x64, arm64]
+        config: [Debug, Release]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: 108c38d1dbe572e042b8df7d54c97051a492ac74
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Compile C and C++ headers with MSVC
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne '108c38d1dbe572e042b8df7d54c97051a492ac74') { throw 'Unexpected source revision' }
+          Write-Host 'Tested SHA: 108c38d1dbe572e042b8df7d54c97051a492ac74'
+          @'
+          #include <windows.h>
+          #define WINDOWSAPPSDK_RELEASE_MAJORMINOR 0x00020000
+          #define WINDOWSAPPSDK_RELEASE_VERSION_TAG_W L""
+          #define WINDOWSAPPSDK_RUNTIME_VERSION_UINT64 0ULL
+          #include "MddBootstrap.h"
+          '@ | Set-Content bootstrap.cpp
+          @'
+          #include <windows.h>
+          #include "MddBootstrap.h"
+          '@ | Set-Content bootstrap.c
+          $runtime = '${{ matrix.config }}' -eq 'Debug' ? '/MDd' : '/MD'
+          cl /nologo /std:c++17 /EHsc /c $runtime /Idev/WindowsAppRuntime_BootstrapDLL bootstrap.cpp
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /TC /c $runtime /Idev/WindowsAppRuntime_BootstrapDLL bootstrap.c
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+  sdk-build:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        sha: [4008afbe7fb56717e798350ea78b225e72b567a5, 108c38d1dbe572e042b8df7d54c97051a492ac74]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ matrix.sha }}
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1
+        with:
+          dotnet-version: '6.0.425'
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+        with:
+          arch: x64
+      - name: Build Foundation x64 Release
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne '${{ matrix.sha }}') { throw 'Unexpected source revision' }
+          Write-Host 'Tested SHA: ${{ matrix.sha }}'
+          ./BuildAll.ps1 -Platform x64 -Configuration Release -AzureBuildStep BuildFoundation
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
